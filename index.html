@@ -1,0 +1,629 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>無人機法規與應用挑戰賽</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    }
+    body {
+      background: #0f172a;
+      color: #f8fafc;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      overflow: hidden;
+    }
+    #game-container {
+      position: relative;
+      width: 480px;
+      height: 680px;
+      background: #1e293b;
+      border-radius: 12px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+    canvas {
+      display: block;
+      background: linear-gradient(180deg, #091e3a 0%, #173b6c 60%, #1f508a 100%);
+    }
+    /* 介面浮層 (Overlay) */
+    .screen {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(15, 23, 42, 0.94);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      z-index: 10;
+    }
+    .hidden {
+      display: none !important;
+    }
+    h1 {
+      font-size: 26px;
+      color: #38bdf8;
+      margin-bottom: 8px;
+      text-align: center;
+    }
+    p {
+      color: #94a3b8;
+      font-size: 14px;
+      text-align: center;
+      margin-bottom: 20px;
+    }
+    .input-group {
+      width: 100%;
+      max-width: 280px;
+      margin-bottom: 14px;
+    }
+    .input-group label {
+      display: block;
+      font-size: 13px;
+      margin-bottom: 4px;
+      color: #cbd5e1;
+    }
+    input {
+      width: 100%;
+      padding: 10px 14px;
+      border-radius: 6px;
+      border: 1px solid #475569;
+      background: #0f172a;
+      color: #fff;
+      font-size: 16px;
+      outline: none;
+    }
+    input:focus {
+      border-color: #38bdf8;
+    }
+    button {
+      background: #0284c7;
+      color: white;
+      border: none;
+      padding: 12px 28px;
+      border-radius: 8px;
+      font-size: 16px;
+      font-weight: bold;
+      cursor: pointer;
+      transition: background 0.2s, transform 0.1s;
+      margin-top: 10px;
+    }
+    button:hover {
+      background: #0369a1;
+      transform: translateY(-1px);
+    }
+    /* 排行榜表格 */
+    .leaderboard-table {
+      width: 100%;
+      max-height: 200px;
+      overflow-y: auto;
+      border-collapse: collapse;
+      margin: 15px 0;
+      font-size: 13px;
+    }
+    .leaderboard-table th, .leaderboard-table td {
+      padding: 6px 10px;
+      text-align: center;
+      border-bottom: 1px solid #334155;
+    }
+    .leaderboard-table th {
+      color: #38bdf8;
+      background: #1e293b;
+    }
+    /* 觸控手機控制按鈕 */
+    .touch-controls {
+      display: flex;
+      width: 100%;
+      height: 70px;
+      background: #0f172a;
+      border-top: 1px solid #334155;
+    }
+    .touch-btn {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: transparent;
+      color: #94a3b8;
+      font-size: 20px;
+      font-weight: bold;
+      border: none;
+      user-select: none;
+    }
+    .touch-btn:active {
+      background: #1e293b;
+      color: #38bdf8;
+    }
+  </style>
+</head>
+<body>
+
+  <div id="game-container">
+    <!-- 登入與登記畫面 -->
+    <div id="login-screen" class="screen">
+      <h1>🚁 無人機飛行挑戰</h1>
+      <p>請登記學號，進入無人機安全與應用實戰考驗</p>
+      
+      <div class="input-group">
+        <label for="class-name">班別 (Class)</label>
+        <input type="text" id="class-name" placeholder="例如：2A, 3B" maxlength="5">
+      </div>
+      <div class="input-group">
+        <label for="class-no">學號 (Class No.)</label>
+        <input type="number" id="class-no" placeholder="例如：12" min="1" max="50">
+      </div>
+
+      <button id="start-btn">開始飛行任務</button>
+    </div>
+
+    <!-- 結算畫面 -->
+    <div id="game-over-screen" class="screen hidden">
+      <h1 id="result-title">任務結束</h1>
+      <p id="result-score" style="font-size: 18px; color: #facc15; font-weight: bold;"></p>
+      
+      <h3 style="color: #cbd5e1; font-size: 14px; margin-top: 10px;">🏆 本機排行榜 (Top 5)</h3>
+      <table class="leaderboard-table">
+        <thead>
+          <tr>
+            <th>名次</th>
+            <th>班別</th>
+            <th>學號</th>
+            <th>得分</th>
+          </tr>
+        </thead>
+        <tbody id="leaderboard-body">
+          <!-- 動態載入 -->
+        </tbody>
+      </table>
+
+      <button id="restart-btn">再試一次</button>
+      <button id="clear-data-btn" style="background:#475569; font-size:12px; padding:6px 14px; margin-top:8px;">清空本機紀錄</button>
+    </div>
+
+    <!-- 遊戲畫布 -->
+    <canvas id="gameCanvas" width="480" height="610"></canvas>
+
+    <!-- 行動裝置左右控制區 -->
+    <div class="touch-controls">
+      <button class="touch-btn" id="btn-left">◀ 向左移 (A)</button>
+      <button class="touch-btn" id="btn-right">向右移 (D) ▶</button>
+    </div>
+  </div>
+
+  <script>
+    // --- 題庫資料 ---
+    const QUESTIONS = [
+      {
+        text: "香港《小型無人機令》標準操作飛行高度上限是多少？",
+        a: "A. 90米 (約300呎)",
+        b: "B. 200米 (約650呎)",
+        correct: "A"
+      },
+      {
+        text: "在夜間山野搜救任務中，無人機常配備哪種鏡頭？",
+        a: "A. 熱成像鏡頭 (Thermal)",
+        b: "B. 廣角微距鏡頭",
+        correct: "A"
+      },
+      {
+        text: "重量超過多少克的小型無人機必須於民航處平台註冊？",
+        a: "A. 100克",
+        b: "B. 250克",
+        correct: "B"
+      },
+      {
+        text: "下列哪一個區域屬於香港法規嚴格管制的禁飛區？",
+        a: "A. 維港兩岸及機場",
+        b: "B. 所有學校操場",
+        correct: "A"
+      },
+      {
+        text: "現代智慧農業中，無人機最主要的普及用途是什麼？",
+        a: "A. 農田巡檢與精準噴灑",
+        b: "B. 挖掘地下灌溉水道",
+        correct: "A"
+      },
+      {
+        text: "無人機標準飛行操作，必須維持哪一種目視原則？",
+        a: "A. 目視飛行 (VLOS)",
+        b: "B. 完全脫離視線飛行",
+        correct: "A"
+      },
+      {
+        text: "利用無人機多角度照片合成3D地形模型的技術稱為？",
+        a: "A. 攝影測量法",
+        b: "B. 數碼濾鏡法",
+        correct: "A"
+      }
+    ];
+
+    // --- 遊戲狀態 ---
+    const canvas = document.getElementById("gameCanvas");
+    const ctx = canvas.getContext("2d");
+
+    let currentStudent = { className: "", classNo: "" };
+    let score = 0;
+    let lives = 3;
+    let questionIndex = 0;
+    let isGameOver = false;
+    let isRunning = false;
+
+    // 無人機玩家物件
+    const drone = {
+      x: canvas.width / 2,
+      y: 520,
+      width: 48,
+      height: 30,
+      speed: 6,
+      vx: 0
+    };
+
+    // 航道閘門（選項球/光門）
+    let gates = [];
+    let currentQuestion = null;
+
+    // 鍵盤狀態監聽
+    const keys = { left: false, right: false };
+
+    window.addEventListener("keydown", (e) => {
+      if (e.key === "ArrowLeft" || e.key === "a" || e.key === "A") keys.left = true;
+      if (e.key === "ArrowRight" || e.key === "d" || e.key === "D") keys.right = true;
+    });
+
+    window.addEventListener("keyup", (e) => {
+      if (e.key === "ArrowLeft" || e.key === "a" || e.key === "A") keys.left = false;
+      if (e.key === "ArrowRight" || e.key === "d" || e.key === "D") keys.right = false;
+    });
+
+    // 觸控按鈕綁定
+    const btnLeft = document.getElementById("btn-left");
+    const btnRight = document.getElementById("btn-right");
+
+    const setupHoldBtn = (btn, dir) => {
+      btn.addEventListener("mousedown", () => keys[dir] = true);
+      btn.addEventListener("mouseup", () => keys[dir] = false);
+      btn.addEventListener("mouseleave", () => keys[dir] = false);
+      btn.addEventListener("touchstart", (e) => { e.preventDefault(); keys[dir] = true; });
+      btn.addEventListener("touchend", () => keys[dir] = false);
+    };
+    setupHoldBtn(btnLeft, "left");
+    setupHoldBtn(btnRight, "right");
+
+    // --- 開始與登記流程 ---
+    const loginScreen = document.getElementById("login-screen");
+    const gameOverScreen = document.getElementById("game-over-screen");
+    const startBtn = document.getElementById("start-btn");
+    const restartBtn = document.getElementById("restart-btn");
+    const clearDataBtn = document.getElementById("clear-data-btn");
+
+    startBtn.addEventListener("click", () => {
+      const cls = document.getElementById("class-name").value.trim().toUpperCase();
+      const num = document.getElementById("class-no").value.trim();
+
+      if (!cls || !num) {
+        alert("請先輸入班別與學號！");
+        return;
+      }
+      currentStudent = { className: cls, classNo: num };
+      loginScreen.classList.add("hidden");
+      resetGame();
+    });
+
+    restartBtn.addEventListener("click", () => {
+      gameOverScreen.classList.add("hidden");
+      resetGame();
+    });
+
+    clearDataBtn.addEventListener("click", () => {
+      if (confirm("確定要清空本機的所有排名記錄嗎？")) {
+        localStorage.removeItem("drone_leaderboard");
+        renderLeaderboard();
+      }
+    });
+
+    // 重置遊戲參數
+    function resetGame() {
+      score = 0;
+      lives = 3;
+      questionIndex = 0;
+      isGameOver = false;
+      isRunning = true;
+      drone.x = canvas.width / 2;
+      loadNextQuestion();
+      requestAnimationFrame(gameLoop);
+    }
+
+    // 載入下一題
+    function loadNextQuestion() {
+      if (questionIndex >= QUESTIONS.length) {
+        endGame(true);
+        return;
+      }
+      currentQuestion = QUESTIONS[questionIndex];
+      questionIndex++;
+
+      // 產生兩個下落選項門
+      const gateY = 120;
+      gates = [
+        {
+          id: "A",
+          text: currentQuestion.a,
+          x: 40,
+          y: gateY,
+          width: 180,
+          height: 60,
+          speed: 1.6,
+          isCorrect: currentQuestion.correct === "A"
+        },
+        {
+          id: "B",
+          text: currentQuestion.b,
+          x: 260,
+          y: gateY,
+          width: 180,
+          height: 60,
+          speed: 1.6,
+          isCorrect: currentQuestion.correct === "B"
+        }
+      ];
+    }
+
+    // --- 繪圖函數 ---
+    function drawDrone(x, y) {
+      ctx.save();
+      ctx.translate(x, y);
+
+      // 機身本體
+      ctx.fillStyle = "#38bdf8";
+      ctx.beginPath();
+      ctx.ellipse(0, 0, 22, 10, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // 航行燈號 (前後綠紅燈)
+      ctx.fillStyle = "#22c55e";
+      ctx.beginPath();
+      ctx.arc(-18, 0, 3, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "#ef4444";
+      ctx.beginPath();
+      ctx.arc(18, 0, 3, 0, Math.PI * 2);
+      ctx.fill();
+
+      // 四軸旋翼支架
+      ctx.strokeStyle = "#94a3b8";
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(-20, -12);
+      ctx.lineTo(20, 12);
+      ctx.moveTo(-20, 12);
+      ctx.lineTo(20, -12);
+      ctx.stroke();
+
+      // 旋翼葉片旋轉動態模擬
+      const rotorRadius = 10;
+      ctx.fillStyle = "rgba(224, 242, 254, 0.7)";
+      const time = Date.now() * 0.05;
+      [
+        { cx: -20, cy: -12 },
+        { cx: 20, cy: -12 },
+        { cx: -20, cy: 12 },
+        { cx: 20, cy: 12 }
+      ].forEach(pos => {
+        ctx.beginPath();
+        ctx.ellipse(pos.cx, pos.cy, rotorRadius, 3, time, 0, Math.PI * 2);
+        ctx.fill();
+      });
+
+      ctx.restore();
+    }
+
+    function drawHUD() {
+      // 頂部資訊列
+      ctx.fillStyle = "rgba(15, 23, 42, 0.85)";
+      ctx.fillRect(0, 0, canvas.width, 50);
+
+      ctx.fillStyle = "#f8fafc";
+      ctx.font = "bold 14px sans-serif";
+      ctx.fillText(`學員: ${currentStudent.className} (${currentStudent.classNo})`, 16, 30);
+
+      // 得分與生命值
+      ctx.fillStyle = "#facc15";
+      ctx.fillText(`得分: ${score}`, 210, 30);
+
+      ctx.fillStyle = "#ef4444";
+      let hearts = "❤️".repeat(lives);
+      ctx.fillText(`生命: ${hearts}`, 350, 30);
+
+      // 當前題目框
+      if (currentQuestion) {
+        ctx.fillStyle = "#1e293b";
+        ctx.strokeStyle = "#38bdf8";
+        ctx.lineWidth = 1;
+        ctx.fillRect(20, 58, canvas.width - 40, 52);
+        ctx.strokeRect(20, 58, canvas.width - 40, 52);
+
+        ctx.fillStyle = "#e2e8f0";
+        ctx.font = "13px sans-serif";
+        ctx.textAlign = "center";
+        ctx.fillText(`Q${questionIndex}: ${currentQuestion.text}`, canvas.width / 2, 88);
+        ctx.textAlign = "start";
+      }
+    }
+
+    function drawGates() {
+      gates.forEach(gate => {
+        // 光門背景
+        ctx.fillStyle = "#0369a1";
+        ctx.strokeStyle = "#38bdf8";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.roundRect(gate.x, gate.y, gate.width, gate.height, 8);
+        ctx.fill();
+        ctx.stroke();
+
+        // 選項文字
+        ctx.fillStyle = "#ffffff";
+        ctx.font = "bold 13px sans-serif";
+        ctx.textAlign = "center";
+        ctx.fillText(gate.text, gate.x + gate.width / 2, gate.y + 35);
+        ctx.textAlign = "start";
+      });
+    }
+
+    // 碰撞偵測 (AABB)
+    function checkCollision(droneObj, box) {
+      return (
+        droneObj.x + 20 > box.x &&
+        droneObj.x - 20 < box.x + box.width &&
+        droneObj.y + 10 > box.y &&
+        droneObj.y - 10 < box.y + box.height
+      );
+    }
+
+    // --- 主遊戲更新循環 ---
+    function gameLoop() {
+      if (!isRunning) return;
+
+      // 1. 移動控制
+      if (keys.left && drone.x > 30) {
+        drone.x -= drone.speed;
+      }
+      if (keys.right && drone.x < canvas.width - 30) {
+        drone.x += drone.speed;
+      }
+
+      // 2. 更新閘門位置
+      let selectedGate = null;
+      let gatePassedBottom = false;
+
+      for (let i = 0; i < gates.length; i++) {
+        gates[i].y += gates[i].speed;
+
+        // 碰撞檢測
+        if (checkCollision(drone, gates[i])) {
+          selectedGate = gates[i];
+          break;
+        }
+
+        if (gates[i].y > canvas.height) {
+          gatePassedBottom = true;
+        }
+      }
+
+      // 3. 處理答題判定
+      if (selectedGate) {
+        if (selectedGate.isCorrect) {
+          score += 100;
+        } else {
+          lives--;
+        }
+
+        if (lives <= 0) {
+          endGame(false);
+          return;
+        } else {
+          loadNextQuestion();
+        }
+      } else if (gatePassedBottom) {
+        // 未作答漏過，扣一命
+        lives--;
+        if (lives <= 0) {
+          endGame(false);
+          return;
+        } else {
+          loadNextQuestion();
+        }
+      }
+
+      // 4. 清屏與重繪
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      drawGates();
+      drawDrone(drone.x, drone.y);
+      drawHUD();
+
+      requestAnimationFrame(gameLoop);
+    }
+
+    // --- 結束遊戲與排行榜管理 ---
+    function endGame(completedAll) {
+      isRunning = false;
+      isGameOver = true;
+
+      const titleEl = document.getElementById("result-title");
+      const scoreEl = document.getElementById("result-score");
+
+      if (completedAll) {
+        titleEl.textContent = "🎉 順利完成巡航任務！";
+        titleEl.style.color = "#4ade80";
+      } else {
+        titleEl.textContent = "💥 無人機迫降（任務失敗）";
+        titleEl.style.color = "#f87171";
+      }
+
+      scoreEl.textContent = `最終總分: ${score} 分`;
+
+      // 儲存至本機 LocalStorage 排行榜
+      saveToLeaderboard(currentStudent.className, currentStudent.classNo, score);
+      renderLeaderboard();
+
+      gameOverScreen.classList.remove("hidden");
+    }
+
+    function saveToLeaderboard(className, classNo, newScore) {
+      let data = JSON.parse(localStorage.getItem("drone_leaderboard") || "[]");
+      data.push({
+        className: className,
+        classNo: classNo,
+        score: newScore,
+        date: new Date().toLocaleDateString()
+      });
+
+      // 依分數從高到低排序，同分者依最新時間排序
+      data.sort((a, b) => b.score - a.score);
+
+      // 最多保存 10 筆
+      data = data.slice(0, 10);
+      localStorage.setItem("drone_leaderboard", JSON.stringify(data));
+    }
+
+    function renderLeaderboard() {
+      const tbody = document.getElementById("leaderboard-body");
+      tbody.innerHTML = "";
+      const data = JSON.parse(localStorage.getItem("drone_leaderboard") || "[]");
+
+      if (data.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="4" style="color:#64748b;">暫無排行榜資料</td></tr>`;
+        return;
+      }
+
+      data.slice(0, 5).forEach((item, idx) => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>${idx + 1}</td>
+          <td>${item.className}</td>
+          <td>${item.classNo}</td>
+          <td style="color:#facc15; font-weight:bold;">${item.score}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    // 初始化排版
+    renderLeaderboard();
+  </script>
+</body>
+</html>
